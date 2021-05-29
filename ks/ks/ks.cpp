@@ -76,6 +76,7 @@ Ks::Ks(QWidget *parent)
                             qDebug()<<"解密得到krr:"<<krr;
                             if(splitArray[0]=="download"){//下载文件
                                 QString dk="download@"+krr;
+                                sleep(2);
                                 //发送给客户端
                                 QString ip="127.0.0.1";
                                 qint64 port=10001;

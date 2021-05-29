@@ -90,7 +90,6 @@ Csp::Csp(QWidget *parent)
                                 CS+=Css[Css.size()-1];
                                 firstUpload=false;
                                 QString res_CS=QString("second@%1").arg(CS);
-                                qDebug()<<"res_Cs"<<res_CS;
                                 tcpSocket1->write(res_CS.toUtf8().data());
                             }
                         }else if(splitArray[2]=="download"){//下载，收到@@download@token
@@ -163,7 +162,6 @@ Csp::Csp(QWidget *parent)
                                 token=splitArray[0];
                                 Cs=splitArray[1];
                                 qDebug()<<"token"<<token;
-                                qDebug()<<"Cs"<<Cs;
                                 filePath= "/home/weakdog/cspfiles/"+token;
                                 recvSize=0;
                                 file.setFileName(filePath);
@@ -350,12 +348,12 @@ Csp::Csp(QWidget *parent)
                                 qDebug()<<"更新数据库"<<sq;
                                 sql_query.exec(sq);
                             }else{
+                                test.restart();
                                 QString dd=QString(array);
                                 qDebug()<<"从ks收到更新密钥dd:"<<dd;
                                 //查询数据库，得到所有cs@ckrd
                                 sql_query.exec(QString("select * from files"));
                                 while(sql_query.next()){
-                                    qDebug()<<"why?";
                                     token=sql_query.value(1).toString();
                                     krrd=sql_query.value(3).toString();
                                     QString newKrrd=hashXor(krrd,dd);
@@ -365,10 +363,12 @@ Csp::Csp(QWidget *parent)
                                     //更新数据库
                                     QSqlQuery sql_query2=QSqlQuery(database);
                                     QString sq=QString("update files set krrd = '%1' where token='%2'").arg(newKrrd).arg(token);
-                                    sql_query2.exec(sq);
                                     qDebug()<<sq;
+                                    sql_query2.exec(sq);
                                 }
                                 qDebug()<<"更新系统密钥完成";
+                                time=test.elapsed();
+                                qDebug()<<"更新系统密钥花费时间:"<<time<<"ms";
                             }
 
                         });
@@ -541,4 +541,42 @@ QString Csp::fileIndex(QString filePath){
     qsrand(QTime(0, 0, 0).secsTo(QTime::currentTime()));
     int num = qrand()%(maxIndex);
     return QString::number(num);
+}
+
+void Csp::on_pushButton_clicked()
+{
+    int fakeNumber = ui->lineEdit->text().toInt();
+    qDebug()<<"fakenumber:"<<fakeNumber;
+    for(int i=0;i<fakeNumber;i++){
+        unsigned char*key=new unsigned char[32];
+        RAND_bytes(key, 32);
+        QString fakeToken=QByteArray((char*)key,32).toHex();
+        QString fakeKrrd=QByteArray((char*)key,32).toHex();
+        //假数据制造者
+        QString fakeSh="aaaa";
+        QString fakeCs="fakeCs";
+        QString fakePtr="new";
+        QString sq=QString("INSERT INTO files (sh,token,cs,krrd,ptr) VALUES('%1','%2','%3','%4','%5')").arg(fakeSh).arg(fakeToken).arg(fakeCs).arg(fakeKrrd).arg(fakePtr);
+        ui->textEdit->append(sq);
+        qDebug()<<sq;
+        if(!sql_query.exec(sq)){
+            ui->textEdit->append("插入数据库失败");
+        }else{
+            ui->textEdit->append("插入数据库成功");
+        }
+    }
+    qDebug()<<"制造假数据结束";
+}
+
+
+void Csp::on_pushButton_2_clicked()
+{
+    QString sq=QString("DELETE FROM files");
+    ui->textEdit->append(sq);
+    qDebug()<<sq;
+    if(!sql_query.exec(sq)){
+        ui->textEdit->append("删除数据库失败");
+    }else{
+        ui->textEdit->append("删除数据库成功");
+    }
 }

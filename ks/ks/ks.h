@@ -15,6 +15,7 @@
 #include <openssl/pem.h>
 #include <openssl/rand.h>
 #include <string.h>
+#include <unistd.h>
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class Ks; }

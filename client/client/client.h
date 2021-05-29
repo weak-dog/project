@@ -14,6 +14,10 @@
 #include <QSqlQuery>
 #include <QSqlError>
 #include <QSqlTableModel>
+#include <sys/stat.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <QTime>
 
 namespace Ui {
 class Client;
@@ -77,6 +81,12 @@ private:
     QString index;//文件块索引
     QString blockHash;//块哈希
     QString hsm;//H(s,M)
+    //用户
+    QString userName;
+    QTime test1,test2,test3,test4,test5;//总|是否为首次|加密明文|加密群组密钥|加密随机密钥(首次上传)
+    int time1,time2,time3,time4,time5;//总|是否为首次|加密明文|加密群组密钥|加密随机密钥(首次上传)
+    QTime test6,test7;
+    int time6,time7;
 };
 
 #endif // CLIENT_H

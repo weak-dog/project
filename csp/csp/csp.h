@@ -14,6 +14,7 @@
 #include <QSqlQuery>
 #include <QSqlError>
 #include <openssl/evp.h>
+#include <openssl/rand.h>
 #include <QTime>
 
 QT_BEGIN_NAMESPACE
@@ -36,6 +37,11 @@ public:
     QString sm3_f(QString filepath);//计算文件sm3哈希值
     QString block(QString filePath,int index);
     QString fileIndex(QString filePath);
+
+private slots:
+    void on_pushButton_clicked();
+
+    void on_pushButton_2_clicked();
 
 private:
     Ui::Csp *ui;
@@ -66,5 +72,7 @@ private:
     QString fileName;
     QString blockHash;
     QString ptr;
+    QTime test;
+    int time;
 };
 #endif // CSP_H

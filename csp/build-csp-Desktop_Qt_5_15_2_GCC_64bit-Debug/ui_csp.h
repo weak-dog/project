@@ -11,7 +11,8 @@
 
 #include <QtCore/QVariant>
 #include <QtWidgets/QApplication>
-#include <QtWidgets/QGridLayout>
+#include <QtWidgets/QLineEdit>
+#include <QtWidgets/QPushButton>
 #include <QtWidgets/QTextEdit>
 #include <QtWidgets/QWidget>
 
@@ -20,21 +21,28 @@ QT_BEGIN_NAMESPACE
 class Ui_Csp
 {
 public:
-    QGridLayout *gridLayout;
     QTextEdit *textEdit;
+    QPushButton *pushButton;
+    QLineEdit *lineEdit;
+    QPushButton *pushButton_2;
 
     void setupUi(QWidget *Csp)
     {
         if (Csp->objectName().isEmpty())
             Csp->setObjectName(QString::fromUtf8("Csp"));
         Csp->resize(800, 600);
-        gridLayout = new QGridLayout(Csp);
-        gridLayout->setObjectName(QString::fromUtf8("gridLayout"));
         textEdit = new QTextEdit(Csp);
         textEdit->setObjectName(QString::fromUtf8("textEdit"));
-
-        gridLayout->addWidget(textEdit, 0, 0, 1, 1);
-
+        textEdit->setGeometry(QRect(20, 20, 751, 491));
+        pushButton = new QPushButton(Csp);
+        pushButton->setObjectName(QString::fromUtf8("pushButton"));
+        pushButton->setGeometry(QRect(480, 520, 131, 61));
+        lineEdit = new QLineEdit(Csp);
+        lineEdit->setObjectName(QString::fromUtf8("lineEdit"));
+        lineEdit->setGeometry(QRect(170, 530, 151, 41));
+        pushButton_2 = new QPushButton(Csp);
+        pushButton_2->setObjectName(QString::fromUtf8("pushButton_2"));
+        pushButton_2->setGeometry(QRect(640, 520, 131, 61));
 
         retranslateUi(Csp);
 
@@ -44,6 +52,9 @@ public:
     void retranslateUi(QWidget *Csp)
     {
         Csp->setWindowTitle(QCoreApplication::translate("Csp", "Csp", nullptr));
+        pushButton->setText(QCoreApplication::translate("Csp", "heihei", nullptr));
+        lineEdit->setText(QCoreApplication::translate("Csp", "1", nullptr));
+        pushButton_2->setText(QCoreApplication::translate("Csp", "haha", nullptr));
     } // retranslateUi
 
 };

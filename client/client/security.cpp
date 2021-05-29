@@ -109,31 +109,17 @@ QString Security::get_rand_key(unsigned char * key,int l){
 //文件sm4加密
 int Security::Encrypt_File(unsigned char* key,QString filename){
     unsigned char iv[EVP_MAX_KEY_LENGTH] = "EVP_SM4_CTR"; //保存初始化向量的数组
-    EVP_CIPHER_CTX* ctx;    //EVP加密上下文环境
+    EVP_CIPHER_CTX* ctx; //EVP加密上下文环境
     ctx = EVP_CIPHER_CTX_new();
-    unsigned char out[1024];  //保存密文的缓冲区
-    int outl;
-    unsigned char in[1024];   //保存原文的缓冲区
-    int inl;
+    unsigned char* out=new unsigned char[1024];  //保存密文的缓冲区
+    unsigned char* in=new unsigned char[1024];   //保存原文的缓冲区
+    int inl,outl;
     int rv;
-    FILE *fpIn;
-    FILE *fpOut;
-    //打开待加密文件
-    fpIn = fopen(filename.toStdString().c_str(), "rb");
-    if(fpIn == NULL){
-       return -1;
-    }
-    //打开保存密文的文件
-    char encryptedfname[100];
-    strcpy(encryptedfname, filename.toStdString().c_str());
-    strcat(encryptedfname, ".encrypted");
-    fpOut = fopen(encryptedfname, "wb");
-    if(fpOut == NULL){
-       fclose(fpIn);
-       return -1;
-    }
-    //初始化ctx
-    EVP_CIPHER_CTX_init(ctx);
+    QFile fileIn,fileOut;
+    fileIn.setFileName(filename);
+    fileOut.setFileName(filename+".encrypted");
+    fileIn.open(QIODevice::ReadOnly);
+    fileOut.open(QIODevice::WriteOnly);
     //设置密码算法、key和iv
     rv = EVP_EncryptInit_ex(ctx, EVP_sm4_ecb(), NULL, key, iv);
     if(rv != 1){
@@ -141,32 +127,33 @@ int Security::Encrypt_File(unsigned char* key,QString filename){
        return -1;
     }
     //循环读取原文，加密后后保存到密文文件。
-    for(;;){
-       inl = fread(in,1,1024,fpIn);
-       if(inl <= 0)//读取原文结束
-          break;
-       rv = EVP_EncryptUpdate(ctx, out, &outl, in, inl);//加密
-       if(rv != 1){
-          fclose(fpIn);
-          fclose(fpOut);
-          EVP_CIPHER_CTX_cleanup(ctx);
-          return -1;
-       }
-       fwrite(out, 1, outl, fpOut);//保存密文到文件
+    while(!fileIn.atEnd()){
+        QByteArray qbi=fileIn.read(1024);
+        in=(unsigned char*)qbi.data();
+        rv = EVP_EncryptUpdate(ctx, out, &outl, in, qbi.size());//加密
+        if(rv != 1){
+            fileIn.close();
+            fileOut.close();
+            EVP_CIPHER_CTX_cleanup(ctx);
+            return -1;
+        }
+        QByteArray qbo=QByteArray((char*)out,outl);
+        fileOut.write(qbo);
     }
     //加密结束
     rv = EVP_EncryptFinal_ex(ctx, out, &outl);
     if(rv != 1){
-       fclose(fpIn);
-       fclose(fpOut);
+        fileIn.close();
+        fileOut.close();
        EVP_CIPHER_CTX_cleanup(ctx);
        return -1;
     }
-    fwrite(out,1,outl,fpOut);  //保密密文到文件
-    fclose(fpIn);
-    fclose(fpOut);
+    QByteArray qbo=QByteArray((char*)out,outl);
+    fileOut.write(qbo);
+    fileIn.close();
+    fileOut.close();
     EVP_CIPHER_CTX_cleanup(ctx); //清除EVP加密上下文环境
-    printf("加密已完成\n");
+    qDebug()<<"加密已完成";
     return 1;
 }
 
@@ -175,29 +162,15 @@ int Security::Decrypt_File(unsigned char* key,QString filename){
     unsigned char iv[EVP_MAX_KEY_LENGTH] = "EVP_SM4_CTR";  //保存初始化向量的数组
     EVP_CIPHER_CTX* ctx;    //EVP加密上下文环境
     ctx=EVP_CIPHER_CTX_new();
-    unsigned char out[1024+EVP_MAX_KEY_LENGTH]; //保存解密后明文的缓冲区数组
-    int outl;
-    unsigned char in[1024];    //保存密文数据的数组
-    int inl;
+    unsigned char* in=new unsigned char[1024];
+    unsigned char* out=new unsigned char[1024+EVP_MAX_KEY_LENGTH];
+    int inl,outl;
     int rv;
-    FILE *fpIn;
-    FILE *fpOut;
-  //打开待解密的密文文件
-    fpIn = fopen(filename.toStdString().c_str(), "rb");
-    if(fpIn == NULL)
-    {
-       return -1;
-    }
-    char decryptedfname[100];
-    strcpy(decryptedfname, filename.toStdString().c_str());
-    strcat(decryptedfname, ".decrypted");
-    //打开保存明文的文件
-    fpOut = fopen(decryptedfname, "wb");
-    if(fpOut == NULL)
-    {
-       fclose(fpIn);
-       return -1;
-    }
+    QFile fileIn,fileOut;
+    fileIn.setFileName(filename);
+    fileOut.setFileName(filename+".decrypted");
+    fileIn.open(QIODevice::ReadOnly);
+    fileOut.open(QIODevice::WriteOnly);
     //初始化ctx
     EVP_CIPHER_CTX_init(ctx);
     //设置解密的算法、key和iv
@@ -207,36 +180,36 @@ int Security::Decrypt_File(unsigned char* key,QString filename){
        EVP_CIPHER_CTX_cleanup(ctx);
        return -1;
     }
+    fileIn.seek(0);
     //循环读取原文，解密后后保存到明文文件。
-    for(;;)
-    {
-       inl = fread(in, 1, 1024, fpIn);
-       if(inl <= 0)
-          break;
-       rv = EVP_DecryptUpdate(ctx, out, &outl, in, inl);//解密
-       if(rv != 1)
-       {
-          fclose(fpIn);
-          fclose(fpOut);
-          EVP_CIPHER_CTX_cleanup(ctx);
-          return -1;
-       }
-       fwrite(out, 1, outl, fpOut);//保存明文到文件
+    while(!fileIn.atEnd()){
+        QByteArray qbi=fileIn.read(1024);
+        in=(unsigned char*)qbi.data();
+        rv = EVP_DecryptUpdate(ctx, out, &outl, in, qbi.size());//加密
+        if(rv != 1){
+            fileIn.close();
+            fileOut.close();
+            EVP_CIPHER_CTX_cleanup(ctx);
+            return -1;
+        }
+        QByteArray qbo=QByteArray((char*)out,outl);
+        fileOut.write(qbo);
     }
     //解密结束
     rv = EVP_DecryptFinal_ex(ctx, out, &outl);
     if(rv != 1)
     {
-       fclose(fpIn);
-       fclose(fpOut);
+       fileIn.close();
+       fileOut.close();
        EVP_CIPHER_CTX_cleanup(ctx);
        return -1;
     }
-    fwrite(out,1,outl,fpOut);//保存明文到文件
-    fclose(fpIn);
-    fclose(fpOut);
+    QByteArray qbo=QByteArray((char*)out,outl);
+    fileOut.write(qbo);
+    fileIn.close();
+    fileOut.close();
     EVP_CIPHER_CTX_cleanup(ctx);//清除EVP加密上下文环境
-    printf("解密已完成\n");
+    qDebug()<<"解密结束";
     return 1;
 }
 
@@ -289,23 +262,63 @@ QString Security::hashXor(QString hexStr1,QString hexStr2){
     return result;
 }
 
-QString Security::block(QString filePath,int index){
-    //fileblock
-    QFile file1,file2,file3;
+//QString block2(QString filePath,int index){
+//    //先取文件块存入新文件
+//    //fileblock
+//    QFile file1,file2,file3;
+//    file1.setFileName(filePath);
+//    file2.setFileName("/home/weakdog/clientfiles/block");
+//    file1.open(QIODevice::ReadOnly);
+//    file2.open(QIODevice::WriteOnly);
+//    file1.seek(1024*index);
+//    char buf[1024]={0};
+//    //往文件中读数据
+//    int len=file1.read(buf,sizeof(buf));
+//    file2.write(buf,len);
+//    file1.close();
+//    file2.close();
+//    //计算哈希值
+//    QString blockHash=sm3_f("/home/weakdog/clientfiles/block");
+//    file3.setFileName("/home/weakdog/clientfiles/block");
+//    file3.remove();
+//    return blockHash;
+//}
+
+QString Security::block(unsigned char* key,QString filePath,int index){
+    //先取文件块存入新文件
+    QFile file1,file2;
+    QString filePath2=filePath+".block";
+    QString filePath3=filePath+".block.encrypted";
+    QString filePath4=filePath+".block.encrypted2";
     file1.setFileName(filePath);
-    file2.setFileName("/home/weakdog/clientfiles/block");
+    file2.setFileName(filePath2);
     file1.open(QIODevice::ReadOnly);
     file2.open(QIODevice::WriteOnly);
     file1.seek(1024*index);
     char buf[1024]={0};
-    //往文件中读数据
     int len=file1.read(buf,sizeof(buf));
     file2.write(buf,len);
     file1.close();
     file2.close();
-    //计算哈希值
-    QString blockHash=sm3_f("/home/weakdog/clientfiles/block");
-    file3.setFileName("/home/weakdog/clientfiles/block");
-    file3.remove();
+    //对新文件进行加密
+    Encrypt_File(key,filePath2);
+    //截取密文的前1024字节，去掉填充
+    file1.setFileName(filePath3);
+    file2.setFileName(filePath4);
+    file1.open(QIODevice::ReadOnly);
+    file2.open(QIODevice::WriteOnly);
+    file1.read(buf,1024);
+    file2.write(buf,1024);
+    file1.close();
+    file2.close();
+    QString blockHash=sm3_f(filePath4);
+    qDebug()<<blockHash;
+    //删除文件
+    file1.setFileName(filePath2);
+    file1.remove();
+    file1.setFileName(filePath3);
+    file1.remove();
+    file1.setFileName(filePath4);
+    file1.remove();
     return blockHash;
 }

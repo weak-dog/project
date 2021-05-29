@@ -1,4 +1,4 @@
-#ifndef SECURITY_H
+﻿#ifndef SECURITY_H
 #define SECURITY_H
 
 #include <QFile>
@@ -27,6 +27,7 @@
 #include <openssl/err.h>
 #include <openssl/pem.h>
 #include <QMessageAuthenticationCode>
+#include <QFileInfo>
 
 class Security
 {
@@ -46,7 +47,7 @@ public:
     QString hmacS(QByteArray key,QByteArray message);
     QString HMAC_SM3(QString data, QString key);//sm3-hmac
     QString hashXor(QString hexStr1,QString hexStr2);
-    QString block(QString filePath,int index);
+    QString block(unsigned char* key,QString filePath,int index);
 };
 
 #endif // SECURITY_H

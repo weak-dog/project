@@ -22,6 +22,7 @@ Client::Client(QString account_,QString password_,QWidget *parent) :
     fileModel=new QSqlTableModel(this);
     fileModel->setTable("fileName");
     ui->tableView->setModel(fileModel);
+    fileModel->setFilter(QString("username='%1'").arg(account));
     fileModel->select();
     fileModel->setHeaderData(0,Qt::Horizontal,"文件名");
     sql_query=QSqlQuery(database);
@@ -45,6 +46,7 @@ Client::Client(QString account_,QString password_,QWidget *parent) :
                         [=]()
                         {
                             array=tcpSocket2->readAll();
+                            test3.restart();
                             splitArray=QString(array).split("@");
                             QString krr=splitArray[1];
                             qDebug()<<"r"<<r;
@@ -55,29 +57,27 @@ Client::Client(QString account_,QString password_,QWidget *parent) :
                             key=(unsigned char*)temp.data();
                             if(splitArray[0]=="download"){
                                 //解密文件
+                                qDebug()<<"cipherPath:"<<filePath;
+                                QFileInfo info(filePath);
+                                qDebug()<<"filesize"<<info.size();
                                 Security().Decrypt_File(key,filePath);
-                                //删除密文
-                                QFile re2(filePath);
-                                re2.close();
                                 //更改文件名
-                                QString rename=QString("mv %1 %2").arg(filePath+".decrypted").arg(filePath);
+                                QString rename=QString("mv %1 %2").arg(filePath+".decrypted").arg(filePath+"2");
                                 qDebug()<<rename;
                                 system(rename.toLatin1().data());
                                 qDebug()<<"下载文件成功";
+                                time1=test1.elapsed();
+                                time3=test3.elapsed();
+                                qDebug()<<"下载文件时间："<<time1<<"ms";
+                                qDebug()<<"接收文件时间："<<time2<<"ms";
+                                qDebug()<<"解密文件时间："<<time3<<"ms";
                                 //断开连接
                                 tcpSocket1->disconnectFromHost();
                                 tcpSocket1->close();
                             }else{//上传文件
-                                //加密文件
-                                Security().Encrypt_File(key,filePath);
-                                //计算块哈希
-                                cipherPath=filePath+".encrypted";
-                                qDebug()<<"cipherPath:"<<cipherPath;
-                                blockHash=Security().block(cipherPath,index.toInt());
+                                //TODO加密文件
+                                blockHash=Security().block(key,filePath,index.toInt());
                                 QString bb="blockcheck@"+blockHash;
-                                //删除密文
-                                QFile re2(filePath);
-                                re2.close();
                                 //发送块哈希给服务器
                                 tcpSocket1->write(bb.toLatin1());
                             }
@@ -96,6 +96,7 @@ Client::Client(QString account_,QString password_,QWidget *parent) :
                 if(type==1){//上传
                     if(messages.size()==1){
                         if(splitArray[0]=="first"){//首次上传
+                            time2=test2.elapsed();
                             qDebug()<<"本次上传为首次上传";
                             //生成群组密钥r
                             unsigned char* ur=new unsigned char[32];
@@ -108,14 +109,18 @@ Client::Client(QString account_,QString password_,QWidget *parent) :
                             unsigned char* us=new unsigned char[32];
                             Security().get_rand_key(us,32);//generate random key
                             QString s=QByteArray((char*)us,32).toHex();
+                            test4.restart();
                             QString Cs=calcCs(r,s,filePath,hsm);
+                            time4=test4.elapsed();
                             //发送token@Cs
                             QString tc=token+"@"+Cs;
                             qint32 len2=tcpSocket1->write(tc.toLatin1());
                             if(len2>0)qDebug()<<"发送token@Cs成功";
                             else qDebug()<<"发送token@Cs失败";
                             //发送文件
+                            test5.restart();
                             sendData();
+                            time5=test5.elapsed();
                             //断开连接
                             tcpSocket1->disconnectFromHost();
                             tcpSocket1->close();
@@ -134,7 +139,7 @@ Client::Client(QString account_,QString password_,QWidget *parent) :
                             tcpSocket2->disconnectFromHost();
                             tcpSocket2->close();
                             //插入数据库
-                            QString sq=QString("INSERT INTO file (filename,h,hsm,token) VALUES('%1','%2','%3','%4')").arg(fileName).arg(fileHash).arg(hsm).arg(token);
+                            QString sq=QString("INSERT INTO file (filename,h,hsm,token,username) VALUES('%1','%2','%3','%4','%5')").arg(fileName).arg(fileHash).arg(hsm).arg(token).arg(account);
                             ui->textEdit->append(sq);
                             if(!sql_query.exec(sq)){
                                 ui->textEdit->append("插入数据库失败");
@@ -144,6 +149,12 @@ Client::Client(QString account_,QString password_,QWidget *parent) :
                                 fileModel->select();
                             }
                             messages.clear();
+                            time1+=test1.elapsed();
+                            qDebug()<<"首次上传耗时："<<time1<<"ms";
+                            qDebug()<<"验证是否为首次耗时："<<time2<<"ms";
+                            qDebug()<<"加密明文耗时："<<time3<<"ms";
+                            qDebug()<<"策略加密耗时："<<time4<<"ms";
+                            qDebug()<<"文件传输耗时："<<time5<<"ms";
                         }else{//非首次上传，second@Css
                             qDebug()<<"本次上传非首次上传";
                             QString Css=splitArray[1];
@@ -188,8 +199,8 @@ Client::Client(QString account_,QString password_,QWidget *parent) :
                                 tcpSocket2->disconnectFromHost();
                                 tcpSocket2->close();
                                 //插入数据库
-                                QString sq=QString("INSERT INTO file (filename,h) VALUES('%1','%2')").arg(fileName).arg(fileHash);
-                                qDebug()<<sq;
+                                QString sq=QString("INSERT INTO file (filename,h,hsm,token,username) VALUES('%1','%2','%3','%4','%5')").arg(fileName).arg(fileHash).arg(hsm).arg(token).arg(account);
+                                ui->textEdit->append(sq);
                                 if(!sql_query.exec(sq)){
                                     ui->textEdit->append("插入数据库失败");
                                     qDebug() << sql_query.lastError();
@@ -219,8 +230,10 @@ Client::Client(QString account_,QString password_,QWidget *parent) :
                             r_index=splitArray[1];
                             index=splitArray[2];
                             r=rl[r_index.toInt()];
+                            token=Security().HMAC_SM3(fileHash,r);
                             qDebug()<<"r:"<<r;
                             qDebug()<<"index:"<<index;
+                            qDebug()<<"token:"<<token;
                             file.remove();//删除选择文件时创建的密文
                         }else{//收到"mismatch"，发送upload2@token@Cs
                             qDebug()<<"能解开Cs但文件不对应";
@@ -262,7 +275,7 @@ Client::Client(QString account_,QString password_,QWidget *parent) :
                             tcpSocket2->disconnectFromHost();
                             tcpSocket2->close();
                             //插入数据库
-                            QString sq=QString("INSERT INTO file (filename,h,hsm,token) VALUES('%1','%2','%3','%4')").arg(fileName).arg(fileHash).arg(hsm).arg(token);
+                            QString sq=QString("INSERT INTO file (filename,h,hsm,token,username) VALUES('%1','%2','%3','%4','%5')").arg(fileName).arg(fileHash).arg(hsm).arg(token).arg(account);
                             qDebug()<<sq;
                             if(!sql_query.exec(sq)){
                                 ui->textEdit->append("插入数据库失败");
@@ -276,8 +289,9 @@ Client::Client(QString account_,QString password_,QWidget *parent) :
                     }else{//收到验证r的结果
                         if(splitArray[0]=="success"){
                             //插入数据库
-//                            QString sq=QString("INSERT INTO file (filename,h) VALUES('%1','%2')").arg(fileName).arg(fileHash);
-//                            ui->textEdit->append(sq);
+                            QString sq=QString("INSERT INTO file (filename,h,hsm,token,username) VALUES('%1','%2','%3','%4','%5')").arg(fileName).arg(fileHash).arg(hsm).arg(token).arg(account);
+                            qDebug()<<sq;
+                            ui->textEdit->append(sq);
 //                            if(!sql_query.exec(sq)){
 //                                ui->textEdit->append("插入数据库失败");
 //                                qDebug() << sql_query.lastError();
@@ -293,9 +307,12 @@ Client::Client(QString account_,QString password_,QWidget *parent) :
                         QFile rf;
                         rf.setFileName(cipherPath);
                         rf.remove();
+                        time6+=test6.elapsed();
+                        qDebug()<<"后续上传耗时："<<time6<<"ms";//输出计时
                         messages.clear();
                     }
                 }else if(type==2){//下载
+                    test2.restart();
                     //接收到Cs@filesize
                     fileSize=splitArray[1].toInt();
                     //解密得到r
@@ -329,6 +346,8 @@ Client::Client(QString account_,QString password_,QWidget *parent) :
                     tcpSocket1->disconnectFromHost();;
                     tcpSocket1->close();
                     messages.clear();
+                    time7=test7.elapsed();
+                    qDebug()<<"更新r用时"<<time7<<"ms";
                 }
             }
             );
@@ -342,8 +361,9 @@ Client::Client(QString account_,QString password_,QWidget *parent) :
                 recvSize+=len;
                 if(recvSize==fileSize){
                     file.close();
-                    ui->textEdit->append("接收文件完成");
+                    qDebug()<<"文件接收完成";
                     QMessageBox::information(this,"完成","文件接收完成");
+                    time2=test2.elapsed();
                     //断开连接
                     tcpSocket3->disconnectFromHost();
                     tcpSocket3->close();
@@ -362,6 +382,8 @@ Client::~Client()
 void Client::on_pushButtonSelect_clicked()
 {
     filePath=QFileDialog::getOpenFileName(this,"open","../");
+    test6.restart();
+    test2.restart();
     if(filePath.isEmpty()==false){//如果选择文件路径有效
         qDebug()<<"选择路径："<<filePath;
         fileSize=0;
@@ -373,7 +395,10 @@ void Client::on_pushButtonSelect_clicked()
         //生成随机秘钥
         kr=Security().get_rand_key(key, 32);
         qDebug()<<"生成随机密钥Kr："<<kr;
+        time6=test6.elapsed();
+        test3.restart();
         Security().Encrypt_File(key,filePath);//加密得到随机密文
+        time3=test3.elapsed();
         //获取密文信息
         QFileInfo info(filePath);
         fileName=info.fileName();
@@ -393,11 +418,14 @@ void Client::on_pushButtonSelect_clicked()
     }else{
          ui->textEdit->append("select file fault");
     }
+    time2=test2.elapsed();
 }
 
 //发送文件
 void Client::on_pushButtonUpload_clicked()
 {
+    test6.restart();
+    test2.restart();
     qDebug()<<"------------------------请求上传文件";
     //获取服务器的IP和端口
     QString ip="127.0.0.1";
@@ -426,6 +454,8 @@ void Client::on_pushButtonUpload_clicked()
 //下载文件
 void Client::on_pushButtonDownload_clicked()
 {
+    test1.restart();
+//    test2.restart();
     qDebug()<<"-----------------------------请求下载文件";
     //获取选择的文件名
     int curRow=ui->tableView->currentIndex().row(); //选中行
@@ -443,7 +473,7 @@ void Client::on_pushButtonDownload_clicked()
     ui->textEdit->append("与csp建立连接成功");
     type=2;
     //从数据库中读取文件名对应的哈希值
-    QString sq=QString("select token from file where filename='%1'").arg(fileName);
+    QString sq=QString("select token from file where filename='%1' and username='%2'").arg(fileName).arg(account);
     ui->textEdit->append(sq);
     sql_query.exec(sq);
     sql_query.next();
@@ -468,6 +498,7 @@ void Client::on_pushButtonDownload_clicked()
 //更新r
 void Client::on_pushButtonChange_clicked()
 {
+    test7.start();
     qDebug()<<"--------------请求更新s------------";
     QString ip="127.0.0.1";
     qint64 port=10002;
@@ -557,7 +588,7 @@ bool Client::DecCs(QString Cs,QString&r)
     file1.write(qb);
     file1.close();
     //cpabe-dec
-    QString command="cd /home/weakdog/clientfiles&&cpabe-dec pub_key user1_key Epk.txt.cpabe";
+    QString command="cd /home/weakdog/clientfiles&&cpabe-dec pub_key "+account +"_key "+"Epk.txt.cpabe";
     qDebug()<<"command"<<command;
     system(command.toLatin1().data());
     QFile file2;
@@ -574,7 +605,7 @@ bool Client::DecCs(QString Cs,QString&r)
         QByteArray hxr=file2.readAll();
         QString h_xor_r=QString(hxr);
         //从数据库中读取H(s,M)
-        QString sq=QString("select * from file where filename='%1'").arg(fileName);
+        QString sq=QString("select * from file where filename='%1' and username='%2'").arg(fileName).arg(account);
         qDebug()<<sq;
         sql_query.exec(sq);
         sql_query.next();
